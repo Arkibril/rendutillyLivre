@@ -386,6 +386,71 @@
             updateTransform();
         });
 
+        // Variables pour le tactile
+        let initialPinchDistance = null;
+        let initialScale = null;
+        let lastTouchX = 0;
+        let lastTouchY = 0;
+
+        // Gestion du tactile (Touch Events)
+        container.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                // Pan (1 doigt)
+                panning = true;
+                startX = e.touches[0].clientX - translateX;
+                startY = e.touches[0].clientY - translateY;
+                lastTouchX = e.touches[0].clientX;
+                lastTouchY = e.touches[0].clientY;
+            } else if (e.touches.length === 2) {
+                // Zoom (2 doigts)
+                panning = false;
+                initialPinchDistance = getDistance(e.touches);
+                initialScale = scale;
+            }
+        }, { passive: false });
+
+        container.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // Empêcher le scroll natif
+
+            if (e.touches.length === 1 && panning) {
+                // Pan
+                translateX = e.touches[0].clientX - startX;
+                translateY = e.touches[0].clientY - startY;
+                updateTransform();
+            } else if (e.touches.length === 2 && initialPinchDistance) {
+                // Zoom
+                const currentDistance = getDistance(e.touches);
+                const ratio = currentDistance / initialPinchDistance;
+
+                // Calculer le nouveau scale
+                let newScale = initialScale * ratio;
+                newScale = Math.min(Math.max(0.1, newScale), 5); // Limites
+
+                // Zoomer vers le centre des deux doigts (approximatif pour simplifier, ou centre écran)
+                // Pour faire simple et robuste sur mobile, on zoome souvent au centre ou on ajuste
+                // Ici on applique juste le scale, le centrage exact du zoom tactile demande plus de calculs de vecteurs
+                // On va garder le point central actuel pour simplifier l'UX mobile sans saut
+
+                scale = newScale;
+                updateTransform();
+            }
+        }, { passive: false });
+
+        container.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) {
+                initialPinchDistance = null;
+            }
+            if (e.touches.length === 0) {
+                panning = false;
+            }
+        });
+
+        function getDistance(touches) {
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
         // Contrôles boutons
         window.zoomIn = () => {
             scale *= 1.2;
