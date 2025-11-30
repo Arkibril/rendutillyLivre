@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brainstorming : Le Livre Numérique</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --grid-color: #e1e4e8;
+            --text-color: #2c3e50;
+
+            /* Couleurs des notes */
+            --color-center: #ffffff;
+            --color-haute: #e8f4fd;
+            /* Bleu très clair */
+            --color-jamet: #fdedec;
+            /* Rouge très clair */
+            --color-video: #eafaf1;
+            /* Vert très clair */
+            --color-proj: #fef9e7;
+            /* Jaune très clair */
+
+            --border-haute: #3498db;
+            --border-jamet: #e74c3c;
+            --border-video: #27ae60;
+            --border-proj: #f1c40f;
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            /* Important pour le canvas */
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        /* Le conteneur qui capture les événements de souris */
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            cursor: grab;
+            position: relative;
+            background-image:
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+            overflow: hidden;
+        }
+
+        #canvas-container:active {
+            cursor: grabbing;
+        }
+
+        /* Le contenu qui sera zoomé et déplacé */
+        #canvas-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-origin: 0 0;
+            /* On gère le centrage via JS/CSS initial */
+            width: 0;
+            height: 0;
+        }
+
+        /* SVG pour les lignes de connexion */
+        #connections {
+            position: absolute;
+            top: -5000px;
+            /* Grand espace pour dessiner */
+            left: -5000px;
+            width: 10000px;
+            height: 10000px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        line {
+            stroke: #bdc3c7;
+            stroke-width: 2;
+        }
+
+        /* Style des Notes (Noeuds) */
+        .note {
+            position: absolute;
+            width: 220px;
+            padding: 20px;
+            background: white;
+            border-radius: 2px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1), 0 6px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+            user-select: none;
+            z-index: 1;
+        }
+
+        .note:hover {
+            transform: scale(1.05);
+            box-shadow: 0 14px 28px rgba(0, 0, 0, 0.15), 0 10px 10px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+        }
+
+        .note-title {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .note-desc {
+            font-size: 0.9em;
+            line-height: 1.4;
+            color: #555;
+        }
+
+        .note-citation {
+            margin-top: 10px;
+            font-size: 0.75em;
+            color: #888;
+            font-style: italic;
+        }
+
+        /* Styles spécifiques */
+        .center-node {
+            width: 300px;
+            height: 300px;
+            /* Cercle */
+            border-radius: 50%;
+            justify-content: center;
+            background: var(--color-center);
+            border: 4px solid #2c3e50;
+            z-index: 5;
+            left: -150px;
+            /* Centré par rapport à 0,0 */
+            top: -150px;
+        }
+
+        .center-node .note-title {
+            font-size: 1.4em;
+            margin-bottom: 15px;
+        }
+
+        .type-haute {
+            background: var(--color-haute);
+            border-left: 5px solid var(--border-haute);
+        }
+
+        .type-jamet {
+            background: var(--color-jamet);
+            border-left: 5px solid var(--border-jamet);
+        }
+
+        .type-video {
+            background: var(--color-video);
+            border-left: 5px solid var(--border-video);
+        }
+
+        .type-proj {
+            background: var(--color-proj);
+            border-left: 5px solid var(--border-proj);
+            border-style: dashed;
+        }
+
+        /* Contrôles de zoom */
+        .controls {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        .btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            font-size: 1.2em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="canvas-container">
+        <div id="canvas-content">
+            <svg id="connections"></svg>
+
+            <!-- Question Centrale -->
+            <div class="note center-node" id="center">
+                <div class="note-title">Qu'est-ce qu'un livre numérique aujourd'hui ?</div>
+                <div class="note-desc">Un objet en tension. Il oscille entre l'héritage rassurant du livre papier (le
+                    codex) et les nouvelles possibilités "magiques" du code informatique (l'expérience).</div>
+            </div>
+
+            <!-- Branche 1: Tension Formelle (Haute) -->
+            <div class="note type-haute" style="transform: translate(-400px, -300px);">
+                <div class="note-title">Tension Formelle</div>
+                <div class="note-desc">L'Apparence</div>
+            </div>
+
+            <div class="note type-haute" style="transform: translate(-600px, -450px);">
+                <div class="note-title">Mimétisme (Skeuomorphisme)</div>
+                <div class="note-desc">Imiter les matériaux physiques (page qui tourne, ombres) pour rassurer le
+                    lecteur.</div>
+                <div class="note-citation">Exemple : L'application Livro-Obra conserve des ombres portées.</div>
+            </div>
+
+            <div class="note type-video" style="transform: translate(-300px, -500px);">
+                <div class="note-title">Authenticité Numérique</div>
+                <div class="note-desc">S'émanciper de l'imitation pour trouver un langage propre à l'écran (Flat Design,
+                    abstraction).</div>
+                <div class="note-citation">Exemple : Les pliages infinis impossibles dans la réalité.</div>
+            </div>
+
+            <!-- Branche 2: Tension Sensible (Jamet) -->
+            <div class="note type-jamet" style="transform: translate(400px, -300px);">
+                <div class="note-title">Tension Sensible</div>
+                <div class="note-desc">Le Corps & L'Émotion</div>
+            </div>
+
+            <div class="note type-jamet" style="transform: translate(600px, -450px);">
+                <div class="note-title">Dimension Haptique</div>
+                <div class="note-desc">L'écran n'est plus lisse, il devient une "matière numérique" que l'on manipule.
+                </div>
+                <div class="note-citation">Preuve : Le lecteur plie le carré noir ("Bicho") pour activer l'œuvre.</div>
+            </div>
+
+            <div class="note type-jamet" style="transform: translate(650px, -150px);">
+                <div class="note-title">Magie et Animisme</div>
+                <div class="note-desc"><strong>Livre Enchanté :</strong> Le contenu surgit, disparaît ou se
+                    transforme.<br><br><strong>Livre Animiste :</strong> L'objet semble vivant, autonome.</div>
+            </div>
+
+            <!-- Branche 3: Tension Structurelle -->
+            <div class="note type-haute" style="transform: translate(400px, 300px);">
+                <div class="note-title">Tension Structurelle</div>
+                <div class="note-desc">La Navigation</div>
+            </div>
+
+            <div class="note type-haute" style="transform: translate(600px, 400px);">
+                <div class="note-title">L'Héritage Linéaire</div>
+                <div class="note-desc">Le modèle du "page à page" (comme le PDF ou le livre papier), rassurant mais
+                    limité.</div>
+            </div>
+
+            <div class="note type-video" style="transform: translate(300px, 500px);">
+                <div class="note-title">La Rupture Rhizomatique</div>
+                <div class="note-desc">Navigation par cartes, thèmes ou temps. Le lecteur construit son propre parcours.
+                </div>
+                <div class="note-citation">Preuve : Timeline verticale pour naviguer dans le temps.</div>
+            </div>
+
+            <div class="note type-video" style="transform: translate(500px, 600px);">
+                <div class="note-title">Rôle du Motion Design</div>
+                <div class="note-desc">Les transitions animées servent de repères spatiaux pour ne pas perdre le
+                    lecteur.</div>
+            </div>
+
+            <!-- Branche 4: Typologies -->
+            <div class="note type-haute" style="transform: translate(-400px, 300px);">
+                <div class="note-title">Typologies</div>
+                <div class="note-desc">Les formats actuels</div>
+            </div>
+
+            <div class="note type-haute" style="transform: translate(-600px, 400px);">
+                <div class="note-title">L'E-Catalogue</div>
+                <div class="note-desc">Vise l'exhaustivité scientifique et patrimoniale (long et pérenne).</div>
+            </div>
+
+            <div class="note type-haute" style="transform: translate(-300px, 500px);">
+                <div class="note-title">L'E-Album</div>
+                <div class="note-desc">Format court, événementiel, proche de l'application ou de la presse.</div>
+            </div>
+
+            <div class="note type-haute" style="transform: translate(-500px, 600px);">
+                <div class="note-title">L'Hybride</div>
+                <div class="note-desc">Mélange de livre d'art, de performance et de film d'animation.</div>
+            </div>
+
+            <!-- Projet (Optionnel, conservé pour l'instant) -->
+            <div class="note type-proj" style="transform: translate(0px, 600px);">
+                <div class="note-title">Mon Projet</div>
+                <div class="note-desc">Application à l'exposition</div>
+            </div>
+
+            <div class="note type-proj" style="transform: translate(-150px, 750px);">
+                <div class="note-title">Intention</div>
+                <div class="note-desc">Didactique ou Immersif ?</div>
+            </div>
+
+            <div class="note type-proj" style="transform: translate(150px, 750px);">
+                <div class="note-title">Technologie</div>
+                <div class="note-desc">IA, Scroll infini, AR ?</div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="btn" onclick="zoomOut()">-</button>
+        <button class="btn" onclick="resetView()">R</button>
+        <button class="btn" onclick="zoomIn()">+</button>
+    </div>
+
+    <script>
+        const container = document.getElementById('canvas-container');
+        const content = document.getElementById('canvas-content');
+        const svg = document.getElementById('connections');
+
+        let scale = 1;
+        let panning = false;
+        let pointX = 0;
+        let pointY = 0;
+        let startX = 0;
+        let startY = 0;
+
+        // Configuration initiale
+        let translateX = 0;
+        let translateY = 0;
+
+        function updateTransform() {
+            content.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+        }
+
+        // Zoom avec la molette
+        container.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const xs = (e.clientX - translateX) / scale;
+            const ys = (e.clientY - translateY) / scale;
+            const delta = -e.deltaY;
+
+            (delta > 0) ? (scale *= 1.1) : (scale /= 1.1);
+
+            // Limites de zoom
+            scale = Math.min(Math.max(0.1, scale), 5);
+
+            translateX = e.clientX - xs * scale;
+            translateY = e.clientY - ys * scale;
+
+            updateTransform();
+        });
+
+        // Pan (Déplacement)
+        container.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            startX = e.clientX - translateX;
+            startY = e.clientY - translateY;
+            panning = true;
+            container.style.cursor = 'grabbing';
+        });
+
+        container.addEventListener('mouseup', () => {
+            panning = false;
+            container.style.cursor = 'grab';
+        });
+
+        container.addEventListener('mousemove', (e) => {
+            if (!panning) return;
+            e.preventDefault();
+            translateX = e.clientX - startX;
+            translateY = e.clientY - startY;
+            updateTransform();
+        });
+
+        // Contrôles boutons
+        window.zoomIn = () => {
+            scale *= 1.2;
+            updateTransform();
+        }
+
+        window.zoomOut = () => {
+            scale /= 1.2;
+            updateTransform();
+        }
+
+        window.resetView = () => {
+            scale = 1;
+            translateX = 0;
+            translateY = 0;
+            updateTransform();
+        }
+
+        // Dessiner les lignes
+        function drawLines() {
+            const center = document.getElementById('center');
+            const notes = document.querySelectorAll('.note:not(.center-node)');
+
+            // Nettoyer les lignes existantes
+            svg.innerHTML = '';
+
+            // Coordonnées du centre (relatives au canvas-content)
+            // Le centre est positionné à left: -150px, top: -150px (width 300, height 300)
+            // Donc son centre exact est à 0,0 dans le repère du canvas-content
+            const cx = 0;
+            const cy = 0;
+
+            notes.forEach(note => {
+                // Récupérer la transformation (position) de la note
+                const transform = note.style.transform;
+                const match = transform.match(/translate\((.*?)px,\s*(.*?)px\)/);
+
+                if (match) {
+                    let nx = parseFloat(match[1]);
+                    let ny = parseFloat(match[2]);
+
+                    // Ajuster pour le centre de la note (width 220 + padding 40 = 260 total width approx? non width 220 + padding 20*2 = 260)
+                    // width: 220px, padding: 20px -> total width box-sizing content-box ? par defaut oui.
+                    // Donc width réelle = 220 + 40 = 260. Centre = 130.
+                    // Hauteur variable... on va approximer ou calculer.
+                    const rect = note.getBoundingClientRect();
+                    // On ne peut pas utiliser getBoundingClientRect directement pour les coordonnées car il est affecté par le zoom/pan global
+                    // On utilise les coordonnées locales qu'on a définies dans le style inline
+
+                    // Centre approximatif de la note
+                    const noteCenterX = nx + 130;
+                    const noteCenterY = ny + (note.offsetHeight / 2); // offsetHeight marche si rendu
+
+                    // Créer la ligne
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+
+                    // On doit décaler les coordonnées SVG car le SVG commence à -5000, -5000
+                    const svgOffsetX = 5000;
+                    const svgOffsetY = 5000;
+
+                    line.setAttribute('x1', cx + svgOffsetX);
+                    line.setAttribute('y1', cy + svgOffsetY);
+                    line.setAttribute('x2', noteCenterX + svgOffsetX);
+                    line.setAttribute('y2', noteCenterY + svgOffsetY);
+
+                    svg.appendChild(line);
+                }
+            });
+        }
+
+        // Dessiner les lignes au chargement
+        window.addEventListener('load', drawLines);
+
+        // Initialiser la vue au centre
+        // On veut que 0,0 soit au centre de l'écran
+        translateX = window.innerWidth / 2;
+        translateY = window.innerHeight / 2;
+        updateTransform();
+
+    </script>
+</body>
+
+</html>
